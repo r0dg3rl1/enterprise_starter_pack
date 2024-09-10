@@ -1,0 +1,225 @@
+---
+- name: Install and Configure Satellite
+  hosts: satellite
+  become: true
+  vars:
+    satellite_server_url: "{{ test.satellite.server_url }}"
+    satellite_username: "{{ test.satellite.admin.username }}"
+    satellite_password: "{{ test.satellite.admin.password }}"
+    satellite_organization: "{{ test.satellite.organizations[0].name }}"
+  pre_tasks:
+    - name: Enable all necessary repos for Satellite
+      community.general.rhsm_repository:
+        name: "{{ all.satellite.system_repositories }}"
+        state: enabled
+        purge: true
+
+    # - name: Enable yum module
+    #   ansible.builtin.dnf:
+    #     name: '@satellite:el8'
+    #     state: present
+
+    - name: Install required packages for Satellite
+      ansible.builtin.dnf:
+        name: "{{ all.satellite.system_required_packages }}"
+        state: present
+
+    - name: Ensure forward DNS is resolvable.
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^192\.168\.11\.78'
+        line: 192.168.11.78 sat001.management.test.esp.ninja satellite.management.test.esp.ninja
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Firewall port rules
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: true
+        state: enabled
+      loop: "{{ all.satellite.system_requirements.firewall_ports }}"
+
+    - name: Firewall service rules
+      ansible.posix.firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+      loop: "{{ all.satellite.system_requirements.firewall_services }}"
+
+  roles:
+    - role: redhat.satellite_operations.installer
+      vars:
+        satellite_installer_scenario: "satellite"
+        satellite_installer_package: "satellite-installer"
+        satellite_installer_options:
+          - '--foreman-initial-organization "{{ test.satellite.organizations[0].name }}"'
+          - '--foreman-initial-admin-password "{{ test.satellite.admin.password }}"'
+
+    # - role: redhat.satellite.manifest
+    #   vars:
+    #     satellite_manifest_download: false
+    #     satellite_manifest_path: "{{ test.satellite.manifest_path }}"
+  tasks:
+    - name: Create Satellite Organizations
+      redhat.satellite.organization:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        name: "{{ item.name }}"
+        label: "{{ item.label }}"
+        state: "{{ item.state }}"
+      loop: "{{ test.satellite.organizations }}"
+
+    - name: Create Satellite Locations
+      redhat.satellite.location:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        name: "{{ item.name }}"
+        organizations: "{{ item.organizations }}"
+        state: "{{ item.state }}"
+      loop: "{{ test.satellite.locations }}"
+
+    - name: Enable Red Hat Repositories
+      redhat.satellite.repository_set:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        # name: "{{ item.name }}"
+        label: "{{ item.label }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        product: "{{ item.product }}"
+        repositories: "{{ item.repositories }}"
+        state: "{{ item.state }}"
+      loop: "{{ test.satellite.repository_sets }}"
+
+    - name: Sync Red Hat Repositories
+      redhat.satellite.repository_sync:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        repository: "{{ item.name }}"
+        product: "{{ item.product }}"
+      loop: "{{ test.satellite.repository_sets }}"
+
+    - name: Create Sync Plans
+      redhat.satellite.sync_plan:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        name: "{{ item.name }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        interval: "{{ item.interval }}"
+        sync_date: "{{ item.sync_date }}"
+        products: "{{ item.products }}"
+        state: present
+        enabled: true
+      loop: "{{ test.satellite.sync_plans }}"
+
+    - name: Create Lifecycle Environments
+      redhat.satellite.lifecycle_environment:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        name: "{{ item.name }}"
+        prior: "{{ item.prior }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ test.satellite.lifecycle_environments }}"
+
+    - name: Create Content Views
+      redhat.satellite.content_view:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        name: "{{ item.name }}"
+        repositories: "{{ item.repositories }}"
+      loop: "{{ test.satellite.content_views }}"
+
+    - name: Create Activation Keys
+      redhat.satellite.activation_key:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        name: "{{ item.name }}"
+        # lifecycle_environment: "{{ item.lifecycle_environment }}"
+        content_view: "{{ item.content_view }}"
+        # host_collections:
+        auto_attach: "{{ item.auto_attach }}"
+        release_version: "{{ item.release_version }}"
+        service_level: "{{ item.service_level }}"
+      loop: "{{ test.satellite.activation_keys }}"
+
+    - name: Publish Content Views
+      redhat.satellite.content_view_version:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        content_view: "{{ item.name }}"
+        lifecycle_environments:
+          - Library
+          - "{{ test.satellite.lifecycle_environments[0].name }}"
+          - "{{ test.satellite.lifecycle_environments[1].name }}"
+          - "{{ test.satellite.lifecycle_environments[2].name }}"
+        version: 1
+      loop: "{{ test.satellite.content_views }}"
+  
+
+    - name: Create Host Groups
+      redhat.satellite.hostgroup:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        organization: "{{ test.satellite.organizations[0].name }}"
+        name: "{{ item.name }}"
+        content_view: "{{ item.content_view }}"
+        lifecycle_environment: "{{ item.lifecycle_environment }}"
+        # architecture:
+        # operatingsystem:
+        # medium:
+        # ptable:
+        state: present
+      loop: "{{ test.satellite.hostgroups }}"
+
+    - name: Create Domains
+      redhat.satellite.domain:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        name: "{{ item.name }}"
+        description: "{{ item.description }}"
+        locations: "{{ item.locations }}"
+        organizations: "{{ item.organizations }}"
+        state: present
+      loop: "{{ test.satellite.domains }}"
+
+    # - name: Create Subnets
+    #   redhat.satellite.subnet:
+    #     server_url: "{{ test.satellite.server_url }}"
+    #     username: "{{ test.satellite.admin.username }}"
+    #     password: "{{ test.satellite.admin.password }}"
+    #     name: "{{ item.name }}"
+    #     description: "{{ item.description }}"
+    #     network: "{{ item.network }}"
+    #     mask: "{{ item.mask }}"
+    #     gateway: "{{ item.gateway }}"
+    #     from_ip: "{{ item.from_ip }}"
+    #     to_ip: "{{ item.to_ip }}"
+    #     boot_mode: "{{ item.boot_mode }}"
+    #     dhcp_proxy: "{{ item.dhcp_proxy }}"
+    #     tftp_proxy: "{{ item.tftp_proxy }}"
+    #     dns_proxy: "{{ item.dns_proxy }}"
+    #     template_proxy: "{{ item.template_proxy }}"
+    #     vlanid: "{{ item.vlanid }}"
+    #     mtu: "{{ item.mtu }}"
+    #     domains: "{{ item.domains }}"
+    #     organizations: "{{ item.organizations }}"
+    #     locations: "{{ item.locations }}"
+    #     state: present
+    #   loop: "{{ test.satellite.subnets }}"
