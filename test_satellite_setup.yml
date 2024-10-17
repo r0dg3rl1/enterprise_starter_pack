@@ -24,15 +24,6 @@
         name: "{{ all.satellite.system_required_packages }}"
         state: present
 
-    - name: Ensure forward DNS is resolvable.
-      ansible.builtin.lineinfile:
-        path: /etc/hosts
-        regexp: '^192\.168\.11\.78'
-        line: 192.168.11.78 sat001.management.test.esp.ninja satellite.management.test.esp.ninja
-        owner: root
-        group: root
-        mode: '0644'
-
     - name: Firewall port rules
       ansible.posix.firewalld:
         port: "{{ item }}"
@@ -78,6 +69,7 @@
         password: "{{ test.satellite.admin.password }}"
         name: "{{ item.name }}"
         organizations: "{{ item.organizations }}"
+        parent: "{{ item.parent }}"
         state: "{{ item.state }}"
       loop: "{{ test.satellite.locations }}"
 
@@ -169,7 +161,6 @@
           - "{{ test.satellite.lifecycle_environments[2].name }}"
         version: 1
       loop: "{{ test.satellite.content_views }}"
-  
 
     - name: Create Host Groups
       redhat.satellite.hostgroup:
