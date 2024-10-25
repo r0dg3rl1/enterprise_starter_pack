@@ -1,106 +1,35 @@
 ---
 - name: Build test home lab
-  hosts: 127.0.0.1
-  connection: local
+  hosts: esp_machine
   become: true
+  gather_facts: false
   tasks:
-    # - name: Ensure hypervisor server has all required packages.
-    #   ansible.builtin.dnf:
-    #     name: "{{ all.hypervisor.required_packages }}"
-    #     state: installed
+    - name: Ensure hypervisor server has all required packages.
+      ansible.builtin.dnf:
+        name: "{{ all.hypervisor.required_packages }}"
+        state: installed
 
-    # - name: Get XML data of a specified network
-    #   community.libvirt.virt_net:
-    #     command: get_xml
-    #     name: managed.test.esp.ninja
-
-    # - name: Create the test domain networks.
-    #   jm1.libvirt.net_xml:
-    #     state: present
-    #     xml: |
-    #       <network>
-    #         <name>"{{ item.name }}"</name>
-    #         <uuid>''"{{ item.uuid }}"''</uuid>
-    #         <forward mode='"{{ item.forward_mode }}"'>
-    #           <nat>
-    #             <port start='"{{ item.port_start }}"' end='"{{ item.port_end }}"'/>
-    #           </nat>
-    #         </forward>
-    #         <bridge name='"{{ item.bridge_name }}"' stp='on' delay='0'/>
-    #         <mac address='"{{ item.mac_address }}"'/>
-    #         <ip address='"{{ item.ip_address }}"' netmask='"{{ item.netmask }}"'>
-    #           <dhcp>
-    #             <range start='"{{ item.dhcp_range_start }}"' end='"{{ item.dhcp_range_end }}"'/>
-    #           </dhcp>
-    #         </ip>
-    #       </network>
-    #   loop: "{{ test.libvirt.networks_list }}"
-
-    - name: Create the gateway.test.esp.ninja domain.
+    - name: Create the test domain networks.
       jm1.libvirt.net_xml:
         state: present
-        xml: |
+        xml: |-
           <network>
-            <name>gateway.test.esp.ninja</name>
-            <uuid>f57fefb5-b284-4b64-a6d6-dfa1dfe70280</uuid>
-            <forward mode='nat'>
+            <name>{{ item.name }}</name>
+            <uuid>{{ item.uuid | to_uuid }}</uuid>
+            <forward mode="{{ item.forward_mode }}">
               <nat>
-                <port start='1024' end='65535'/>
+                <port start="{{ item.port_start }}" end="{{ item.port_end }}"/>
               </nat>
             </forward>
-            <bridge name='virbr1' stp='on' delay='0'/>
-            <mac address='52:54:00:50:00:01'/>
-            <domain name='gateway.test.esp.ninja' localOnly='yes'/>
-            <ip address='192.168.10.1' netmask='255.255.255.0'>
+            <bridge name="{{ item.bridge_name }}" stp="on" delay="0"/>
+            <mac address="{{ item.mac_address }}"/>
+            <ip address="{{ item.ip_address }}" netmask="{{ item.netmask }}">
               <dhcp>
-                <range start='192.168.10.2' end='192.168.10.254'/>
+                <range start="{{ item.dhcp_range_start }}" end="{{ item.dhcp_range_end }}"/>
               </dhcp>
             </ip>
           </network>
-
-    - name: Create the management.test.esp.ninja domain.
-      jm1.libvirt.net_xml:
-        state: present
-        xml: |
-          <network>
-            <name>management.test.esp.ninja</name>
-            <uuid>f57fefb5-b284-4b64-a6d6-efa1dfe70290</uuid>
-            <forward mode='nat'>
-              <nat>
-                <port start='1024' end='65535'/>
-              </nat>
-            </forward>
-            <bridge name='virbr2' stp='on' delay='0'/>
-            <mac address='52:54:00:50:00:02'/>
-            <domain name='management.test.esp.ninja' localOnly='yes'/>
-            <ip address='192.168.11.1' netmask='255.255.255.0'>
-              <dhcp>
-                <range start='192.168.11.2' end='192.168.11.254'/>
-              </dhcp>
-            </ip>
-          </network>
-
-    - name: Create the managed.test.esp.ninja domain.
-      jm1.libvirt.net_xml:
-        state: present
-        xml: |
-          <network>
-            <name>managed.test.esp.ninja</name>
-            <uuid>f57fefb5-b284-4b64-a6d6-ffa1dfe70203</uuid>
-            <forward mode='nat'>
-              <nat>
-                <port start='1024' end='65535'/>
-              </nat>
-            </forward>
-            <bridge name='virbr3' stp='on' delay='0'/>
-            <mac address='52:54:00:50:00:03'/>
-            <domain name='managed.test.esp.ninja' localOnly='yes'/>
-            <ip address='192.168.13.1' netmask='255.255.255.0'>
-              <dhcp>
-                <range start='192.168.13.2' end='192.168.13.254'/>
-              </dhcp>
-            </ip>
-          </network>
+      loop: "{{ test.libvirt.networks_list }}"
 
 # Networks added, but not started. Needed to manually start the networks.
     - name: Start the networks.
@@ -122,6 +51,22 @@
         name: "{{ item.name }}"
         capacity: "{{ item.capacity }}"
       loop: "{{ test.libvirt.storage_volumes_list }}"
+
+    - name: Download dvd iso
+      ansible.builtin.copy:
+        src: /var/lib/libvirt/images/rhel-8.10-x86_64-dvd.iso
+        dest: /var/lib/libvirt/images/rhel-8.10-x86_64-dvd.iso
+        owner: qemu
+        group: qemu
+        mode: '0644'
+
+    - name: Download kickstart file
+      ansible.builtin.copy:
+        src: ./files/satellite_kickstart.txt
+        dest: /var/lib/libvirt/images
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Create VMs
       jm1.libvirt.domain:
