@@ -58,7 +58,7 @@
 
     - name: Domains | Get Domain Locations
       ansible.builtin.shell: |
-        set -o pipefail
+        set -o pipefail &&
         hammer --no-headers domain info --name "{{ item | trim }}" --fields "Locations" | awk 'NR > 1' | tr '\n' '; '
       loop: "{{ result_domains_list.stdout_lines }}"
       register: result_domain_locations
@@ -93,7 +93,7 @@
 
     - name: Subnets | Get Subnet Locations
       ansible.builtin.shell: |
-        set -o pipefail
+        set -o pipefail &&
         hammer --no-headers subnet info --id "{{ item }}" --fields "Locations" | awk 'NR > 1' | tr '\n' '; '
       loop: "{{ result_subnets_list.stdout_lines }}"
       register: result_subnet_locations
@@ -101,7 +101,7 @@
 
     - name: Subnets | Get Subnet Remote execution proxies
       ansible.builtin.shell: |
-        set -o pipefail
+        set -o pipefail &&
         hammer --no-headers subnet info --id "{{ item }}" --fields "Remote execution proxies" | awk '/Name:/ {print $2}'
       loop: "{{ result_subnets_list.stdout_lines }}"
       register: result_subnet_remote_execution_proxies
