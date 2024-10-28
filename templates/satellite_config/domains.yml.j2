@@ -1,0 +1,16 @@
+{% set domains_number_int = domains_number | int %}
+---
+domains:
+{% for n in range(0, domains_number_int) %}
+- name: "{{ (result_domains_info.results[n].stdout | from_yaml).Name }}"
+  description: "{{ (result_domains_info.results[n].stdout | from_yaml).Description }}"
+  locations:
+{% set domain_locations = (result_domain_locations.results[n].stdout | from_yaml).split(';') %}
+{% for location in domain_locations %}
+{% if location != "" %}
+    - "{{ location | trim }}"
+{% endif %}
+{% endfor %}
+  organizations:
+    - "{{ (result_domains_info.results[n].stdout | from_yaml).Organizations }}"
+{% endfor %}
