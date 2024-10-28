@@ -1,0 +1,126 @@
+# This playbook uses a combination of the Satellite Restful API, as well as hammer commands to get the current configuration of an existing Red Hat Satellite.
+# Then it processes the data and creates templates which can be used by the Ansible playbook which installs and configures Red Hat Satellite.
+---
+- name: Get Satellite config and export in a consumable way
+  hosts: satellite
+  become: true
+  gather_facts: false
+  tasks:
+
+    - name: Organizations | Get organization info
+      redhat.satellite.organization_info:
+        server_url: "{{ test.satellite.server_url }}"
+        username: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+      register: result_organization_info
+
+    - name: Organizations | Template out organizations
+      ansible.builtin.template:
+        src: templates/satellite_config/organizations.yml.j2
+        dest: /tmp/organizations.yml
+        owner: "{{ test.satellite.template.owner }}"
+        group: "{{ test.satellite.template.group }}"
+        mode: "{{ test.satellite.template.mode }}"
+
+    - name: Locations | Get Locations info
+      ansible.builtin.uri:
+        url: "https://{{ test.satellite.fqdn }}/api/v2/locations"
+        method: GET
+        user: "{{ test.satellite.admin.username }}"
+        password: "{{ test.satellite.admin.password }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: result_locations_api_response
+
+    - name: Locations | Set Locations info list
+      ansible.builtin.set_fact:
+        locations_info_list: "{{ result_locations_api_response.json.results }}"
+
+    - name: Locations | Template out Locations
+      ansible.builtin.template:
+        src: templates/satellite_config/locations.yml.j2
+        dest: /tmp/locations.yml
+        owner: "{{ test.satellite.template.owner }}"
+        group: "{{ test.satellite.template.group }}"
+        mode: "{{ test.satellite.template.mode }}"
+
+    - name: Domains | Get Domains list
+      ansible.builtin.command: hammer --no-headers domain list --fields name
+      register: result_domains_list
+      changed_when: false
+
+    - name: Domains | Get Domains info
+      ansible.builtin.command: hammer --no-headers domain info --name "{{ item | trim }}" --fields "Name,Description,Locations,Organizations"
+      loop: "{{ result_domains_list.stdout_lines }}"
+      register: result_domains_info
+      changed_when: false
+
+    - name: Domains | Get Domain Locations
+      ansible.builtin.shell: |
+        set -o pipefail
+        hammer --no-headers domain info --name "{{ item | trim }}" --fields "Locations" | awk 'NR > 1' | tr '\n' '; '
+      loop: "{{ result_domains_list.stdout_lines }}"
+      register: result_domain_locations
+      changed_when: false
+
+    - name: Domains | Get number of Domains
+      ansible.builtin.set_fact:
+        domains_number: "{{ result_domains_info.results | length }}"
+
+    - name: Domains | Template out Domains
+      ansible.builtin.template:
+        src: templates/satellite_config/domains.yml.j2
+        dest: /tmp/domains.yml
+        owner: "{{ test.satellite.template.owner }}"
+        group: "{{ test.satellite.template.group }}"
+        mode: "{{ test.satellite.template.mode }}"
+
+    - name: Subnets | Get Subnets list
+      ansible.builtin.command: hammer --no-headers subnet list --fields id
+      register: result_subnets_list
+      changed_when: false
+
+    - name: Subnets | Get Subnets info
+      ansible.builtin.command: hammer --no-headers subnet info --id "{{ item }}"
+      loop: "{{ result_subnets_list.stdout_lines }}"
+      register: result_subnets_info
+      changed_when: false
+
+    - name: Subnets | Get number of Subnets
+      ansible.builtin.set_fact:
+        subnets_number: "{{ result_subnets_info.results | length | int }}"
+
+    - name: Subnets | Get Subnet Locations
+      ansible.builtin.shell: |
+        set -o pipefail
+        hammer --no-headers subnet info --id "{{ item }}" --fields "Locations" | awk 'NR > 1' | tr '\n' '; '
+      loop: "{{ result_subnets_list.stdout_lines }}"
+      register: result_subnet_locations
+      changed_when: false
+
+    - name: Subnets | Get Subnet Remote execution proxies
+      ansible.builtin.shell: |
+        set -o pipefail
+        hammer --no-headers subnet info --id "{{ item }}" --fields "Remote execution proxies" | awk '/Name:/ {print $2}'
+      loop: "{{ result_subnets_list.stdout_lines }}"
+      register: result_subnet_remote_execution_proxies
+      changed_when: false
+
+    - name: Subnets | Template out Subnets
+      ansible.builtin.template:
+        src: templates/satellite_config/subnets.yml.j2
+        dest: /tmp/subnets.yml
+        owner: "{{ test.satellite.template.owner }}"
+        group: "{{ test.satellite.template.group }}"
+        mode: "{{ test.satellite.template.mode }}"
+
+# - name: Settings | Template out Settings
+# - name: Host Groups | Template out Host Groups
+# - name: Lifecycle Environments | Template out Lifecycle Environments
+# - name: Products | Template out Products
+# - name: Repository Sets | Template out Repository Sets
+# - name: Repositories | Template out Repositories
+# - name: Content Views | Template out Content Views
+# - name: Global Parameters | Template out Global Parameters
+# - name: Content Credentials | Template out Content Credentials
