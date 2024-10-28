@@ -1,0 +1,36 @@
+---
+subnets:
+{% for n in range(0, subnets_number | int ) %}
+{% set output = result_subnets_info.results[n].stdout | from_yaml %}
+- name: "{{ output['Name'] }}"
+  boot_mode: "{{ output['Boot Mode'] | default(omit) }}"
+  cidr: "{{ output['Network Prefix'] | default(omit) }}"
+  description: "{{ output['Description'] | default(None) }}"
+  dhcp_proxy: "{{ output['Smart Proxies']['DHCP'] | default(None) }}"
+  dns_primary: "{{ output['Primary DNS'] }}"
+  dns_proxy: "{{ output['Smart Proxies']['DHCP'] | default(None) }}"
+  dns_secondary: "{{ output['[Secondary DNS'] | default(None) }}"
+  domains: "{{ output['Domains'] | default(omit) }}"
+  from_ip: "{{ output['Start of IP Range'] | default(omit) }}"
+  gateway: "{{ output['Gateway Addr'] }}"
+  ipam: "{{ output['IPAM'] }}"
+  locations:
+{% set subnet_locations = (result_subnet_locations.results[n].stdout | from_yaml).split(';') %}
+{% for location in subnet_locations %}
+{% if location != "" %}
+    - "{{ location | trim }}"
+{% endif %}
+{% endfor %}
+  mask: "{{ output['Network Mask'] }}"
+  mtu: "{{ output['MTU'] | default(9000) }}"
+  network: "{{ output['Network Addr'] }}"
+  network_type: "{{ output['Protocol'] | default(IPV4) }}"
+  organizations:
+    - "{{ output['Organizations'] }}"
+  parameters: "{{ output['Parameters'] | default(omit) }}"
+  remote_execution_proxies:
+    - "{{ (output | from_yaml)['Remote execution proxies']['Name'] | default('') }}"
+  to_ip: "{{ output['End of IP Range'] | default(omit) }}"
+  tftp_proxy: "{{ output['Smart Proxies']['TFTP'] | default(None) }}"
+  vlandid: "{{ output['VLAN ID'] | default(omit) }}"
+{% endfor %}
