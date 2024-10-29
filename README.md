@@ -7,6 +7,9 @@ Inspired from the "starter pack" meme, e.g.
 
 The Enterprise Starter Pack is all the I.T. infrastructure an enterprise or enterprise wanna-be would deploy, automated through infrastructure as code.
 
+![Enterprise Starter Pack Meme](./images/esp_meme.png)
+
 ## Contributing
 Reach out if you have any ideas or suggestions.  
 My email is `r0dg3r.l1@gmail.com` 
+
