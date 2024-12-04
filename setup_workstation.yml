@@ -1,0 +1,34 @@
+---
+- name: Set up Workstation
+  hosts: 127.0.0.1
+  gather_facts: false
+  tasks:
+    - name: Get VScode from the Internet
+      block:
+        - name: Download the VSCode RPM package
+          ansible.builtin.get_url:
+            url: https://code.visualstudio.com/sha/download?build=stable&os=linux-rpm-x64
+            dest: /tmp/vscode-stable.rpm
+
+        - name: Import the Microsoft GPG key
+          ansible.builtin.rpm_key:
+            key: https://packages.microsoft.com/keys/microsoft.asc
+            state: present
+          become: true
+
+        - name: Install VSCode using the RPM package
+          ansible.builtin.dnf:
+            name: /tmp/vscode-stable.rpm
+            state: present
+          become: true
+
+        - name: Clean up the RPM package file
+          file:
+            path: /tmp/vscode-stable.rpm
+            state: absent
+
+              #    - name: Install all Workstation Packages
+              #      ansible.builtin.package:
+              #        name: "{{ workstation_package_list }}"
+              #        state: present
+
