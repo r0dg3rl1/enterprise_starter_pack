@@ -2,30 +2,50 @@
 - name: Set up Workstation
   hosts: 127.0.0.1
   gather_facts: false
+  vars:
+    vscode_extensions:
+      - GitHub.copilot
   tasks:
-    - name: Get VScode from the Internet
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+
+    - name: Get and Configure VScode from the Internet
       block:
         - name: Download the VSCode RPM package
           ansible.builtin.get_url:
             url: https://code.visualstudio.com/sha/download?build=stable&os=linux-rpm-x64
             dest: /tmp/vscode-stable.rpm
+          when: "'code' not in ansible_facts.packages"
 
         - name: Import the Microsoft GPG key
           ansible.builtin.rpm_key:
             key: https://packages.microsoft.com/keys/microsoft.asc
             state: present
           become: true
+          when: "'code' not in ansible_facts.packages"
 
         - name: Install VSCode using the RPM package
           ansible.builtin.dnf:
             name: /tmp/vscode-stable.rpm
             state: present
           become: true
+          when: "'code' not in ansible_facts.packages"
 
         - name: Clean up the RPM package file
           file:
             path: /tmp/vscode-stable.rpm
             state: absent
+          when: "'code' not in ansible_facts.packages"
+        
+        - name: Get List of Installed VSCode Extensions
+          ansible.builtin.command: code --list-extensions
+          register: result_installed_vscode_extensions
+          changed_when: false
+        
+        - name: Install VSCode Extensions
+          ansible.builtin.command: code --install-extension "{{ item }}"
+          loop: "{{ vscode_extensions }}"
+          when: item not in result_installed_vscode_extensions.stdout_lines
 
               #    - name: Install all Workstation Packages
               #      ansible.builtin.package:
