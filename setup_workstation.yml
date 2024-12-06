@@ -8,6 +8,8 @@
       - golang.go
       - ms-python.python
       - redhat.ansible
+    workstation_package_list:
+      - golang-bin
   tasks:
     - name: Gather package facts
       ansible.builtin.package_facts:
@@ -50,8 +52,8 @@
           loop: "{{ vscode_extensions }}"
           when: item not in result_installed_vscode_extensions.stdout_lines
 
-              #    - name: Install all Workstation Packages
-              #      ansible.builtin.package:
-              #        name: "{{ workstation_package_list }}"
-              #        state: present
-
+        - name: Install all Workstation Packages
+          ansible.builtin.package:
+            name: "{{ workstation_package_list }}"
+            state: present
+          become: true
